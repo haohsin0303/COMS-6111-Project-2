@@ -7,8 +7,7 @@ import requests
 import spacy
 from spanbert import SpanBERT
 from spacy_help_functions import get_entities, create_entity_pairs
-
-spanbert = SpanBERT("./pretrained_spanbert")  
+from html import unescape
 
 # Global Variables
 API_KEY = None
@@ -30,14 +29,22 @@ nlp = spacy.load("en_core_web_lg")
 entities_of_interest = []
 
 possible_relations = ["Schools_Attended", "Work_For", "Live_In", "Top_Member_Employees"]
+spanbert = SpanBERT("./pretrained_spanbert")  
 
 
 # Define the required named entity types for each relation
+# required_entity_types = {
+#     "per:employee_of": {"subject": "PERSON", "object": "ORGANIZATION"},
+#     "org:top_members/employees": {"subject": "ORGANIZATION", "object": "PERSON"},
+#     "per:schools_attended": {"subject": "PERSON", "object": "ORGANIZATION"},
+#     "per:live_in": {"subject": "PERSON", "object": ["LOCATION", "CITY", "STATE_OR_PROVINCE", "COUNTRY"]}
+# }
+
 required_entity_types = {
-    "per:employee_of": {"subject": "PERSON", "object": "ORGANIZATION"},
-    "org:top_members/employees": {"subject": "ORGANIZATION", "object": "PERSON"},
-    "per:schools_attended": {"subject": "PERSON", "object": "ORGANIZATION"},
-    "per:live_in": {"subject": "PERSON", "object": ["LOCATION", "CITY", "STATE_OR_PROVINCE", "COUNTRY"]}
+    "per:employee_of": "Work_For",
+    "org:top_members/employees": "Top_Member_Employees",
+    "per:schools_attended": "Schools_Attended",
+    "per:live_in": "Live_In"
 }
 
 
@@ -108,15 +115,19 @@ def parse_search_results(res):
         result_url = item.get('link', 'none')
         visited_urls.add(result_url)
     
-    for url in visited_urls:
+    for url_count, url in enumerate(visited_urls):
         # try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()  # raises an exception for 4xx or 5xx status codes
         page_content = response.content
+        print("URL ( {curr_url} / {total_num_of_urls}): {link}".format(curr_url=url_count, total_num_of_urls=len(visited_urls), link=url))
 
         # Extract the actual plain text from the webpage using Beautiful Soup.
         soup = BeautifulSoup(page_content, "html.parser")
-        resulting_plain_text = " ".join(soup.get_text())
+        resulting_plain_text = "".join(soup.text)
+        resulting_plain_text = resulting_plain_text.replace("\n", " ").replace("\t", " ").strip()
+        resulting_plain_text = " ".join(resulting_plain_text.split())
+        # resulting_plain_text = unescape(resulting_plain_text)
         print("Fetching text from url ...")
 
         # Truncate the text to its first 10,000 characters (for efficiency) and discard the rest.
@@ -128,14 +139,21 @@ def parse_search_results(res):
         print("Annotating the webpage using spacy...")
 
         # Split the text into sentences
-        # sentences = [s.text.strip() for s in doc.sents]
+        # sentences = [s.text.replace("\n", "").replace("\t", "").strip() for s in doc.sents]
+        # for i, s in enumerate(doc.sents):
+        #     print(s)
+        #     if i > 5:
+        #         break
+        # for sent in doc.sents:
+            # sent = sent.text.replace("\n", "").replace("\t", "").strip()
+        # print(sentences[:10])
 
         # # Extract named entities from each sentence
         # entities = []
         # for s in doc.sents:
         #     entities.extend([(e.text, e.label_) for e in s.ents])
             
-        print("Extracted {num_of_sentences} sentences. Processing each sentence one by one to check for presence of right pair of named entity types; if so, will run the second pipeline ...".format(num_of_sentences=len(doc.sents)))
+        print("Extracted {num_of_sentences} sentences. Processing each sentence one by one to check for presence of right pair of named entity types; if so, will run the second pipeline ...".format(num_of_sentences=len(list(doc.sents))))
         if EXTRACTION_METHOD == "-spanbert":
             spanbertExtraction(doc)
         else:
@@ -170,15 +188,18 @@ def spanbertExtraction(doc):
     
     for sentence in doc.sents:
         print("\n\nProcessing sentence: {}".format(sentence))
-        print("Tokenized sentence: {}".format([token.text for token in sentence]))
+        # print("Tokenized sentence: {}".format([token.text for token in sentence]))
         ents = get_entities(sentence, entities_of_interest)
-        print("spaCy extracted entities: {}".format(ents))
+        # print(ents)
+        # print("spaCy extracted entities: {}".format(ents))
 
         # create entity pairs
         candidate_pairs = []
         sentence_entity_pairs = create_entity_pairs(sentence, entities_of_interest)
         for ep in sentence_entity_pairs:
-            if R == 1 and ep[1][1] == "ORGANIZATION" and ep[2][1] == "PERSON": # Schools_Attended: Subject=PERSON, Object=ORGANIZATION
+            print("EP:", ep)
+            if R == 1 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Schools_Attended: Subject=PERSON, Object=ORGANIZATION
+                print("SCHOOLS_ATTENDED HIT")
                 candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
             elif R == 2 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Work_For: Subject=PERSON, Object=ORGANIZATION
                 candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
@@ -189,25 +210,25 @@ def spanbertExtraction(doc):
 
         # Classify Relations for all Candidate Entity Pairs using SpanBERT
         candidate_pairs = [p for p in candidate_pairs if not p["subj"][1] in ["DATE", "LOCATION"]]  # ignore subject entities with date/location type
-        print("Candidate entity pairs:")
-        for p in candidate_pairs:
-            print("Subject: {}\tObject: {}".format(p["subj"][0:2], p["obj"][0:2]))
-        print("Applying SpanBERT for each of the {} candidate pairs. This should take some time...".format(len(candidate_pairs)))
-
+        # print("Candidate entity pairs:")
+        # for p in candidate_pairs:
+            # print("Subject: {}\tObject: {}".format(p["subj"][0:2], p["obj"][0:2]))
+        # print("Applying SpanBERT for each of the {} candidate pairs. This should take some time...".format(len(candidate_pairs)))
+        print("# of candidate_pairs:", len(candidate_pairs))
         if len(candidate_pairs) == 0:
             continue
 
-        print("not skipped", len(candidate_pairs))
+        # print("not skipped", len(candidate_pairs))
         
         relation_preds = spanbert.predict(candidate_pairs)  # get predictions: list of (relation, confidence) pairs
 
         # Print Extracted Relations
         print("\nExtracted relations:")
         for ex, pred in list(zip(candidate_pairs, relation_preds)):
-            print("ex", ex)
-            print("pred", pred)
             relation = pred[0]
-            if relation in ['per:schools_attended', 'per:employee_of', 'per:cities_of_residence', 'org:top_members/employees']:
+            print("relation:", relation, ex, pred[1])
+            if relation in ['per:schools_attended', 'per:employee_of', 'per:cities_of_residence', 'org:top_members/employees']\
+            and required_entity_types[relation] == possible_relations[int(R)-1]:
                 print("\tSubject: {}\tObject: {}\tRelation: {}\tConfidence: {:.2f}".format(ex["subj"][0], ex["obj"][0], relation, pred[1]))
 
 
