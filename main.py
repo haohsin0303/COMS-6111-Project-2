@@ -14,9 +14,10 @@ spanbert = SpanBERT("./pretrained_spanbert")
 API_KEY = None
 ENGINE_KEY = None
 # sk-t14ovJEbrUjc4eimt0BvT3BlbkFJZS1hOo97fZYj317oO2Z
-OPEN_AI_KEY = None
+OPENAI_KEY = None
 OPEN_API_MODEL = 'text-davinci-003'
 TEMPERATURE = 0.2
+ITERATION_COUNT = 0
 EXTRACTION_METHOD = None
 CALCULATED_PRECISION = -1
 USER_QUERY = ""
@@ -70,6 +71,8 @@ def get_google_search_results():
     Returns if number of search results is less than 10 and throws exception if API or Engine key are invalid.
     """
 
+    global ITERATION_COUNT
+
     service = build("customsearch", "v1", developerKey=API_KEY)
     querying = True
     while querying:
@@ -90,7 +93,9 @@ def get_google_search_results():
                 querying = False
                 return
             else:
+                print("=========== Iteration: {count} - Query: {query} ===========\n".format(count=ITERATION_COUNT, query=Q))
                 querying = parse_search_results(res)
+                ITERATION_COUNT += 1
         except HttpError:
             print("API key or Engine key not valid. Please pass a valid API and Engine key.")
             querying = False
@@ -112,13 +117,17 @@ def parse_search_results(res):
         # Extract the actual plain text from the webpage using Beautiful Soup.
         soup = BeautifulSoup(page_content, "html.parser")
         resulting_plain_text = " ".join(soup.get_text())
+        print("Fetching text from url ...")
 
         # Truncate the text to its first 10,000 characters (for efficiency) and discard the rest.
         if len(resulting_plain_text) > 10000:
+            print("Trimming webpage content from {resulting_text_length} to 10000 characters".format(resulting_text_length=len(resulting_plain_text)))
             resulting_plain_text = resulting_plain_text[:10000]
+        print("Webpage length (num characters): {text_length}".format(text_length=len(resulting_plain_text)))
         doc = nlp(resulting_plain_text)
+        print("Annotating the webpage using spacy...")
 
-        # # Split the text into sentences
+        # Split the text into sentences
         # sentences = [s.text.strip() for s in doc.sents]
 
         # # Extract named entities from each sentence
@@ -126,6 +135,7 @@ def parse_search_results(res):
         # for s in doc.sents:
         #     entities.extend([(e.text, e.label_) for e in s.ents])
             
+        print("Extracted {num_of_sentences} sentences. Processing each sentence one by one to check for presence of right pair of named entity types; if so, will run the second pipeline ...".format(num_of_sentences=len(doc.sents)))
         if EXTRACTION_METHOD == "-spanbert":
             spanbertExtraction(doc)
         else:
