@@ -184,9 +184,11 @@ def filter_entities_of_interest():
 
 def spanbertExtraction(doc):
 
+    global X
+
     filter_entities_of_interest()
     
-    for sentence in doc.sents:
+    for index, sentence in enumerate(doc.sents):
         print("\n\nProcessing sentence: {}".format(sentence))
         # print("Tokenized sentence: {}".format([token.text for token in sentence]))
         ents = get_entities(sentence, entities_of_interest)
@@ -222,16 +224,38 @@ def spanbertExtraction(doc):
         
         relation_preds = spanbert.predict(candidate_pairs)  # get predictions: list of (relation, confidence) pairs
 
+
+        if (index + 1) % 5 == 0:
+            print("Processed {count} / {total} sentences".format(count=index+1, total=len(list(doc.sents))))
+
         # Print Extracted Relations
-        print("\nExtracted relations:")
         for ex, pred in list(zip(candidate_pairs, relation_preds)):
+            print("\n\t=== Extracted Relation ===")
             relation = pred[0]
             print("relation:", relation, ex, pred[1])
             if relation in ['per:schools_attended', 'per:employee_of', 'per:cities_of_residence', 'org:top_members/employees']\
             and required_entity_types[relation] == possible_relations[int(R)-1]:
-                print("\tSubject: {}\tObject: {}\tRelation: {}\tConfidence: {:.2f}".format(ex["subj"][0], ex["obj"][0], relation, pred[1]))
-
-
+                output_confidence = pred[1]
+                print("\tOutput Confidence: {output_confidence} ; Subject: {subject} ; Object: {object} ;".format(output_confidence=output_confidence, subject=ex["subj"][0], object=ex["obj"][0]))
+                # print("\tSubject: {}\tObject: {}\tRelation: {}\tConfidence: {:.2f}".format(ex["subj"][0], ex["obj"][0], relation, pred[1]))
+                if (output_confidence >= T):
+                    for extracted_tuple in X.copy():
+                        if (extracted_tuple[1] == ex["subj"][0] and extracted_tuple[2] == ex["obj"][0]):
+                            if (extracted_tuple[0] > output_confidence):
+                                print("Duplicate with lower confidence than existing record. Ignoring this.")
+                                print("==========")
+                                break
+                            else:
+                                X.remove(extracted_tuple)
+                                X.add((output_confidence, ex["subj"][0], ex["obj"][0]))
+                                print("Adding to set of extracted relations")
+                                print("==========")
+                        else:
+                            X.add((output_confidence, ex["subj"][0], ex["obj"][0]))
+                            print("Adding to set of extracted relations")
+                            print("==========")
+                        
+                        
 
     
 
