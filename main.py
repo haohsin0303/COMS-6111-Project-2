@@ -107,6 +107,7 @@ def get_google_search_results():
             print("API key or Engine key not valid. Please pass a valid API and Engine key.")
             querying = False
 
+
 def parse_search_results(res):
 
     visited_urls = set()
@@ -135,8 +136,8 @@ def parse_search_results(res):
             print("Trimming webpage content from {resulting_text_length} to 10000 characters".format(resulting_text_length=len(resulting_plain_text)))
             resulting_plain_text = resulting_plain_text[:10000]
         print("Webpage length (num characters): {text_length}".format(text_length=len(resulting_plain_text)))
-        doc = nlp(resulting_plain_text)
         print("Annotating the webpage using spacy...")
+        doc = nlp(resulting_plain_text)
 
         # Split the text into sentences
         # sentences = [s.text.replace("\n", "").replace("\t", "").strip() for s in doc.sents]
@@ -168,6 +169,7 @@ def parse_search_results(res):
         # except requests.exceptions.Timeout:
         #     # Skip url if timed out
         #     continue
+
     
 def filter_entities_of_interest():
     global entities_of_interest
@@ -182,11 +184,16 @@ def filter_entities_of_interest():
     elif R == 4:
         entities_of_interest = ["ORGANIZATION", "PERSON"]
 
+
 def spanbertExtraction(doc):
 
     global X
 
     filter_entities_of_interest()
+
+    sentences_with_annotations = 0
+    overall_relations = 0
+    non_duplicated_relations = 0
     
     for index, sentence in enumerate(doc.sents):
         print("\n\nProcessing sentence: {}".format(sentence))
@@ -220,10 +227,9 @@ def spanbertExtraction(doc):
         if len(candidate_pairs) == 0:
             continue
 
-        # print("not skipped", len(candidate_pairs))
-        
         relation_preds = spanbert.predict(candidate_pairs)  # get predictions: list of (relation, confidence) pairs
-
+        if len(relation_preds) > 0:
+            sentences_with_annotations += 1
 
         if (index + 1) % 5 == 0:
             print("Processed {count} / {total} sentences".format(count=index+1, total=len(list(doc.sents))))
@@ -231,37 +237,40 @@ def spanbertExtraction(doc):
         # Print Extracted Relations
         for ex, pred in list(zip(candidate_pairs, relation_preds)):
             print("\n\t=== Extracted Relation ===")
-            relation = pred[0]
-            print("relation:", relation, ex, pred[1])
-            if relation in ['per:schools_attended', 'per:employee_of', 'per:cities_of_residence', 'org:top_members/employees']\
-            and required_entity_types[relation] == possible_relations[int(R)-1]:
-                output_confidence = pred[1]
-                print("\tOutput Confidence: {output_confidence} ; Subject: {subject} ; Object: {object} ;".format(output_confidence=output_confidence, subject=ex["subj"][0], object=ex["obj"][0]))
-                # print("\tSubject: {}\tObject: {}\tRelation: {}\tConfidence: {:.2f}".format(ex["subj"][0], ex["obj"][0], relation, pred[1]))
-                if (output_confidence >= T):
-                    for extracted_tuple in X.copy():
-                        if (extracted_tuple[1] == ex["subj"][0] and extracted_tuple[2] == ex["obj"][0]):
-                            if (extracted_tuple[0] > output_confidence):
-                                print("Duplicate with lower confidence than existing record. Ignoring this.")
-                                print("==========")
-                                break
-                            else:
-                                X.remove(extracted_tuple)
-                                X.add((output_confidence, ex["subj"][0], ex["obj"][0]))
-                                print("Adding to set of extracted relations")
-                                print("==========")
+            print("relation:", pred[0])
+            # if relation in ['per:schools_attended', 'per:employee_of', 'per:cities_of_residence', 'org:top_members/employees']\
+            # and required_entity_types[relation] == possible_relations[int(R)-1]:
+            overall_relations += 1
+            non_duplicated_relations += 1
+            output_confidence = pred[1]
+            print("\tInput tokens: {input_tokens}".format(input_tokens=ex["tokens"]))
+            print("\tOutput Confidence: {output_confidence} ; Subject: {subject} ; Object: {object} ;".format(output_confidence=output_confidence, subject=ex["subj"][0], object=ex["obj"][0]))
+            # print("\tSubject: {}\tObject: {}\tRelation: {}\tConfidence: {:.2f}".format(ex["subj"][0], ex["obj"][0], relation, pred[1]))
+            if (output_confidence >= float(T)):
+                for extracted_tuple in X.copy():
+                    if (extracted_tuple[1] == ex["subj"][0] and extracted_tuple[2] == ex["obj"][0]):
+                        if (extracted_tuple[0] > output_confidence):
+                            non_duplicated_relations -= 1
+                            print("Duplicate with lower confidence than existing record. Ignoring this.")
+                            print("==========")
+                            break
                         else:
+                            X.remove(extracted_tuple)
                             X.add((output_confidence, ex["subj"][0], ex["obj"][0]))
                             print("Adding to set of extracted relations")
                             print("==========")
-                        
-                        
+                    else:
+                        X.add((output_confidence, ex["subj"][0], ex["obj"][0]))
+                        print("Adding to set of extracted relations")
+                        print("==========")
 
-    
+    print("Extracted annotations for  {sentences_with_annotations}  out of total  {total_sentences}  sentences".format(sentences_with_annotations=sentences_with_annotations, total_sentences=len(list(doc.sents))))
+    print("Relations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
 
 
 def gpt3Extraction():
     pass
+
 
 def main():
     """
