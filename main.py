@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 import requests
 import spacy
 from spanbert import SpanBERT
+from gpt3 import Gpt3
 from spacy_help_functions import get_entities, create_entity_pairs
 from html import unescape
 
@@ -39,6 +40,13 @@ spanbert = SpanBERT("./pretrained_spanbert")
 #     "per:schools_attended": {"subject": "PERSON", "object": "ORGANIZATION"},
 #     "per:live_in": {"subject": "PERSON", "object": ["LOCATION", "CITY", "STATE_OR_PROVINCE", "COUNTRY"]}
 # }
+
+relation_names = {
+    1: "per:schools_attended",
+    2: "per:employee_of",
+    3: "per:live_in",
+    4: "org:top_members/employees",
+}
 
 required_entity_types = {
     "per:employee_of": "Work_For",
@@ -111,7 +119,7 @@ def get_google_search_results():
 def parse_search_results(res):
 
     visited_urls = set()
-    for count, item in enumerate(res['items']):
+    for _, item in enumerate(res['items']):
         # Extracts url
         result_url = item.get('link', 'none')
         visited_urls.add(result_url)
@@ -169,6 +177,10 @@ def parse_search_results(res):
         # except requests.exceptions.Timeout:
         #     # Skip url if timed out
         #     continue
+    
+    print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=relation_names[R], relations_length=len(X)))
+    for confidence, subject, object in X:
+        print("Confidence: {confidence} \t| Subject: {subject} \t| Object: {object}".format(confidence=confidence, subject=subject, object=object))
 
     
 def filter_entities_of_interest():
@@ -198,7 +210,7 @@ def spanbertExtraction(doc):
     for index, sentence in enumerate(doc.sents):
         print("\n\nProcessing sentence: {}".format(sentence))
         # print("Tokenized sentence: {}".format([token.text for token in sentence]))
-        ents = get_entities(sentence, entities_of_interest)
+        # ents = get_entities(sentence, entities_of_interest)
         # print(ents)
         # print("spaCy extracted entities: {}".format(ents))
 
@@ -206,7 +218,6 @@ def spanbertExtraction(doc):
         candidate_pairs = []
         sentence_entity_pairs = create_entity_pairs(sentence, entities_of_interest)
         for ep in sentence_entity_pairs:
-            print("EP:", ep)
             if R == 1 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Schools_Attended: Subject=PERSON, Object=ORGANIZATION
                 print("SCHOOLS_ATTENDED HIT")
                 candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
@@ -268,8 +279,39 @@ def spanbertExtraction(doc):
     print("Relations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
 
 
-def gpt3Extraction():
-    pass
+def gpt3Extraction(doc):
+
+    gpt3 = Gpt3(OPENAI_KEY, TEMPERATURE)
+
+    filter_entities_of_interest()
+
+    for _, sentence in enumerate(doc.sents):
+        print("\n\nProcessing sentence: {}".format(sentence))
+
+        # create entity pairs
+        candidate_pairs = []
+        sentence_entity_pairs = create_entity_pairs(sentence, entities_of_interest)
+        for ep in sentence_entity_pairs:
+            if R == 1 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Schools_Attended: Subject=PERSON, Object=ORGANIZATION
+                print("SCHOOLS_ATTENDED HIT")
+                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
+            elif R == 2 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Work_For: Subject=PERSON, Object=ORGANIZATION
+                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
+            elif R == 3 and ep[1][1] == "PERSON" and ep[2][1] in ["LOCATION", "CITY", "STATE_OR_PROVINCE", "COUNTRY"]: # Live_In: Subject=PERSON, Object=LOCATION/CITY/STATE_OR_PROVINCE/COUNTRY
+                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
+            elif R == 4 and ep[1][1] == "ORGANIZATION" and ep[2][1] == "PERSON": # Top_Member_Employees: Subject=ORGANIZATION, Object=PERSON
+                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
+
+        candidate_pairs = [p for p in candidate_pairs if not p["subj"][1] in ["DATE", "LOCATION"]]  # ignore subject entities with date/location type
+
+        print("# of candidate_pairs:", len(candidate_pairs))
+        if len(candidate_pairs) == 0:
+            continue
+
+        input_text = sentence
+        entity_1 = ep[1][0]
+        entity_2 = ep[2][0]
+        gpt3.extract_relation(input_text, entity_1, entity_2)
 
 
 def main():
