@@ -10,8 +10,14 @@ class Gpt3:
     def extract_relation(self, input_text, entity_1, entity_2):
 
         # Construct a prompt with the extracted entities
-        # input_text = "Bill Gates founded Microsoft in 1975. He is currently a philanthropist and supports various causes."
-        prompt = f"{input_text}\nWhat is the relationship between {entity_1} and {entity_2}?"
+        prompt = "{input_text}\n\
+            According to this sentence, what is the relationship between {entity_1} and {entity_2}?\
+            Please choose from the following: ['per:schools_attended', 'per:employee_of', 'per:live_in', 'org:top_members/employees', 'no_relations']".format(
+                input_text=input_text,
+                entity_1=entity_1,
+                entity_2=entity_2,
+            )
+
 
         # Call the GPT-3 API to generate a response based on the prompt
         response = openai.Completion.create(
