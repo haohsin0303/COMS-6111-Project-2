@@ -116,6 +116,10 @@ def get_google_search_results():
         except HttpError:
             print("API key or Engine key not valid. Please pass a valid API and Engine key.")
             querying = False
+    
+    if (ITERATION_COUNT >= 1):
+        print("Total # of iterations = {count}".format(count=ITERATION_COUNT))
+    
 
 
 def parse_search_results(res):
@@ -138,17 +142,15 @@ def parse_search_results(res):
         #Removing redundant newlines and some whitespace characters, according to https://edstem.org/us/courses/34785/discussion/2831362
         preprocessed_text = "".join(soup.text)
         resulting_plain_text = re.sub(u'\xa0', ' ', preprocessed_text) 
-
         resulting_plain_text = re.sub('\t+', ' ', resulting_plain_text) 
-
         resulting_plain_text = re.sub('\n+', ' ', resulting_plain_text) 
-
         resulting_plain_text = re.sub(' +', ' ', resulting_plain_text) 
-
         resulting_plain_text = resulting_plain_text.replace('\u200b', '')
+
         # resulting_plain_text = resulting_plain_text.replace("\n", " ").replace("\t", " ").strip()
         # resulting_plain_text = " ".join(resulting_plain_text.split())
         # resulting_plain_text = unescape(resulting_plain_text)
+
         print("Fetching text from url ...")
 
         # Truncate the text to its first 10,000 characters (for efficiency) and discard the rest.
@@ -157,6 +159,7 @@ def parse_search_results(res):
             resulting_plain_text = resulting_plain_text[:10000]
         print("Webpage length (num characters): {text_length}".format(text_length=len(resulting_plain_text)))
         print("Annotating the webpage using spacy...")
+        
         doc = nlp(resulting_plain_text)
 
         # Split the text into sentences
@@ -232,8 +235,6 @@ def parse_search_results(res):
             return False
         # Else, continue querying
         return True
-
-
     
 def createNewQuery(y):
     """
@@ -256,6 +257,10 @@ def get_TopK_tuples():
 
 
 def filter_entities_of_interest():
+    """
+    Based on the desired relation R, we extract the relation's entities
+
+    """
     global entities_of_interest
 
     # Filter entities of interest based on target relation
@@ -275,6 +280,7 @@ def spanbertExtraction(doc):
 
     filter_entities_of_interest()
 
+    #Declare annotation counts
     sentences_with_annotations = 0
     overall_relations = 0
     non_duplicated_relations = 0
