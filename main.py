@@ -29,6 +29,7 @@ Q = []
 accepted_extraction_methods = {"-spanbert", "-gpt3"}
 nlp = spacy.load("en_core_web_lg")
 entities_of_interest = []
+tuples_used_for_query = set()
 
 possible_relations = ["Schools_Attended", "Work_For", "Live_In", "Top_Member_Employees"]
 spanbert = SpanBERT("./pretrained_spanbert")  
@@ -190,10 +191,70 @@ def parse_search_results(res):
         #     continue
     
     print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=relation_names[R], relations_length=len(X)))
-    for confidence, subject, object in X:
-        print("Confidence: {confidence} \t| Subject: {subject} \t| Object: {object}".format(confidence=confidence, subject=subject, object=object))
+
+    # If X contains at least k tuples
+    if len(X) >= K:
+        if EXTRACTION_METHOD == "-spanbert":
+            topKTuples = get_TopK_tuples()
+            for t in topKTuples:
+                print("Confidence: {confidence} \t| Subject: {subject} \t| Object: {object}".format(confidence=t[0], subject=t[1], object=t[2]))
+        else:
+            for t in X:
+                print("Confidence: {confidence} \t| Subject: {subject} \t| Object: {object}".format(confidence=t[0], subject=t[1], object=t[2]))
+        return False
+
+    # Otherwise,
+    else:
+        found_y_tuple = False
+        # select from X a tuple y
+        for y in X:
+            # y has not been used for querying yet
+            if y not in tuples_used_for_query:
+                if EXTRACTION_METHOD == "-spanbert":
+                    unused_tuples = X - (tuples_used_for_query)
+                    
+                    # y has an extraction confidence that is highest among the tuples in X that
+                    # have not been used for querying.
+                    max_confidence = max(unused_tuples, key=lambda x: x[0])[0]
+                    if y[0] == max_confidence:
+                        found_y_tuple = True
+                        # Create query Q from tuple y
+                        createNewQuery(y)
+                        tuples_used_for_query.add(y)
+                else:
+                    found_y_tuple = True
+                    # Create new query q for -gpt3
+                    createNewQuery(y)
+                    tuples_used_for_query.add(y)
+        # If no such y tuple exists, then stop
+        if (not(found_y_tuple)):
+            print("ISE has stalled before retrieving k high-confidence tuples")
+            return False
+        # Else, continue querying
+        return True
+
 
     
+def createNewQuery(y):
+    """
+    Create a query q from tuple y by just concatenating the 
+    attribute values together,
+    
+    """
+    global Q
+    Q = y[1] + " " + y[2]
+
+
+    
+def get_TopK_tuples():
+    """
+    Returns tuples sorted in decreasing order by extraction codeince,
+    together with the extraction confidence of each tuple.
+    """
+    sorted_X = sorted(X, key=lambda x: x[0], reverse=True)
+    return sorted_X[:K]
+
+
 def filter_entities_of_interest():
     global entities_of_interest
 
