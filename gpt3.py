@@ -15,7 +15,7 @@ class Gpt3:
 
         # Call the GPT-3 API to generate a response based on the prompt
         response = openai.Completion.create(
-            engine="text-davinci-002",
+            engine="text-davinci-003",
             prompt=prompt,
             max_tokens=1024,
             n=1,
