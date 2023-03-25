@@ -9,6 +9,7 @@ from spanbert import SpanBERT
 from gpt3 import Gpt3
 from spacy_help_functions import get_entities, create_entity_pairs
 from html import unescape
+import re
 
 # Global Variables
 API_KEY = None
@@ -133,9 +134,19 @@ def parse_search_results(res):
 
         # Extract the actual plain text from the webpage using Beautiful Soup.
         soup = BeautifulSoup(page_content, "html.parser")
-        resulting_plain_text = "".join(soup.text)
-        resulting_plain_text = resulting_plain_text.replace("\n", " ").replace("\t", " ").strip()
-        resulting_plain_text = " ".join(resulting_plain_text.split())
+        #Removing redundant newlines and some whitespace characters, according to https://edstem.org/us/courses/34785/discussion/2831362
+        preprocessed_text = "".join(soup.text)
+        resulting_plain_text = re.sub(u'\xa0', ' ', preprocessed_text) 
+
+        resulting_plain_text = re.sub('\t+', ' ', resulting_plain_text) 
+
+        resulting_plain_text = re.sub('\n+', ' ', resulting_plain_text) 
+
+        resulting_plain_text = re.sub(' +', ' ', resulting_plain_text) 
+
+        resulting_plain_text = resulting_plain_text.replace('\u200b', '')
+        # resulting_plain_text = resulting_plain_text.replace("\n", " ").replace("\t", " ").strip()
+        # resulting_plain_text = " ".join(resulting_plain_text.split())
         # resulting_plain_text = unescape(resulting_plain_text)
         print("Fetching text from url ...")
 
