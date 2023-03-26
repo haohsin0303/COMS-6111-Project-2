@@ -357,13 +357,19 @@ def spanbertExtraction(doc):
     print("Relations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
 
 
-def gpt3Extraction(doc):
+def gpt3Extraction(doc): # TODO
 
-    gpt3 = Gpt3(OPENAI_KEY, TEMPERATURE)
+    target_relation = relation_names[R]
+    gpt3 = Gpt3(OPENAI_KEY, TEMPERATURE, target_relation)
 
     filter_entities_of_interest()
 
-    for _, sentence in enumerate(doc.sents):
+    #Declare annotation counts
+    sentences_with_annotations = 0
+    overall_relations = 0
+    non_duplicated_relations = 0
+
+    for index, sentence in enumerate(doc.sents):
         print("\n\nProcessing sentence: {}".format(sentence))
 
         # create entity pairs
@@ -371,7 +377,6 @@ def gpt3Extraction(doc):
         sentence_entity_pairs = create_entity_pairs(sentence, entities_of_interest)
         for ep in sentence_entity_pairs:
             if R == 1 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Schools_Attended: Subject=PERSON, Object=ORGANIZATION
-                print("SCHOOLS_ATTENDED HIT")
                 candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
             elif R == 2 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Work_For: Subject=PERSON, Object=ORGANIZATION
                 candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
@@ -382,14 +387,35 @@ def gpt3Extraction(doc):
 
         candidate_pairs = [p for p in candidate_pairs if not p["subj"][1] in ["DATE", "LOCATION"]]  # ignore subject entities with date/location type
 
-        print("# of candidate_pairs:", len(candidate_pairs))
         if len(candidate_pairs) == 0:
             continue
 
-        input_text = sentence
-        entity_1 = ep[1][0]
-        entity_2 = ep[2][0]
-        gpt3.extract_relation(input_text, entity_1, entity_2)
+        relation_preds = gpt3.predict(sentence, candidate_pairs)
+        if len(relation_preds) > 0:
+            sentences_with_annotations += 1
+
+        if (index + 1) % 5 == 0:
+            print("Processed {count} / {total} sentences".format(count=index+1, total=len(list(doc.sents))))
+
+        # Print Extracted Relations
+        for subj, obj in relation_preds:
+            print("\n\t=== Extracted Relation ===")
+            print("Sentence:", sentence)
+            print("Subject: {subject} ; Object: {object} ;".format(subject=subj, object=obj))
+
+            overall_relations += 1
+
+            if (subj, obj) in X:
+                print("Duplicate. Ignoring this.")
+            else:
+                X.add((subj, obj))
+                non_duplicated_relations += 1
+                print("Adding to set of extracted relations")
+            
+            print("==========")                
+    
+    print("Extracted annotations for  {sentences_with_annotations}  out of total  {total_sentences}  sentences".format(sentences_with_annotations=sentences_with_annotations, total_sentences=len(list(doc.sents))))
+    print("Relations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
 
 
 def main():
