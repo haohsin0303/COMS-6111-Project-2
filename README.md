@@ -15,15 +15,30 @@ This project is an implementation of an information retrieval system that aims t
 ## How to run
 1. Install the necessary Python packages using pip:
 ```
-pip3 install --upgrade google-api-python-client
-pip3 install --upgrade setuptools wheel pip
-pip3 install scikit-learn
-pip3 install html2text
-pip3 install requests_html
+pip3 install beautifulsoup4
+pip3 install -U pip setuptools wheel
+pip3 install -U spacy
+python3 -m spacy download en_core_web_lg
+pip3 install openai
 ```
-2. Run the program using the following command:
+
+2. Install SpanBERT
 ```
-python3 main.py  [-spanbert|-gpt3] <API Key> <Engine Key> <OPENAI Key> <r=[1,4]>, <t=[0,1]>, <Seed Query> <k > 0>
+git clone https://github.com/zackhuiiiii/SpanBERT
+cd SpanBERT
+pip3 install -r requirements.txt
+bash download_finetuned.sh
+```
+
+3. Move the project into SpanBERT repository
+```
+cd ..
+mv proj2 ./SpanBERT/
+```
+
+3. Run the program using the following command:
+```
+python3 main.py [-spanbert|-gpt3] <API Key> <Engine Key> <OPENAI Key> <r=[1,4]>, <t=[0,1]>, <Seed Query> <k > 0>
 ```
     - [-spanbert|-gpt3]: An argument that indicates whether we are using SpanBERT (-spanbert) or GPT-3 (-gpt3) for the extraction process.
     - API Key: The Google Custom Search Engine JSON API Key.

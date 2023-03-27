@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from gpt3 import Gpt3
-from spanbert import SpanBERT
+from ..spanbert import SpanBERT
 from spacy_help_functions import extract_relations
 from textwrap import dedent
 
@@ -121,7 +121,7 @@ def get_google_search_results():
 def parse_search_results(res):
 
     # initialize spanbert if the extraction method matches
-    spanbert = SpanBERT("./pretrained_spanbert") if EXTRACTION_METHOD == "-spanbert" else None
+    spanbert = SpanBERT("./SpanBERT/pretrained_spanbert") if EXTRACTION_METHOD == "-spanbert" else None
 
     visited_urls = set()
     for _, item in enumerate(res['items']):
