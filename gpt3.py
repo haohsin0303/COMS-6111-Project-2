@@ -21,10 +21,12 @@ class Gpt3:
 
         for index, sentence in enumerate(doc.sents):
 
-            # create entity pairs
+            # Create and iterate through the entity pairs
             candidate_pairs = []
             entity_pairs = create_entity_pairs(sentence, entities_of_interest)
             for ep in entity_pairs:
+                # Append to the list the relations that satisfy the criteria corresponding to the target relation's entity types
+                # Add the swapped version as well
                 if R == 1 and ((ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION") or (ep[2][1] == "PERSON" and ep[1][1] == "ORGANIZATION")):
                     candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
                     candidate_pairs.append({"tokens": ep[0], "subj": ep[2], "obj": ep[1]})
@@ -41,12 +43,14 @@ class Gpt3:
             if (index + 1) % 5 == 0:
                 print("\tProcessed {count} / {total} sentences".format(count=index+1, total=len(list(doc.sents))))
 
+            # Skip if nothing was appended
             if len(candidate_pairs) == 0:
                 continue
 
-            # Classify Relations for all Candidate Entity Pairs using SpanBERT
+            # Pass into the GPT-3 API the sentence that passed the validation checks
             relation_preds = self.predict(str(sentence).strip())
 
+            # If we get predictions pack, add count
             if len(relation_preds) > 0:
                 sentences_with_annotations += 1
 
@@ -57,6 +61,7 @@ class Gpt3:
 
                 overall_relations += 1
 
+                # Check if duplicates exist in set of extracted tuples
                 if (1.0, prediction[0], prediction[2]) in X:
                     print("\t\tDuplicate. Ignoring this.")
                 else:
@@ -75,6 +80,7 @@ class Gpt3:
 
     def predict(self, input_text):
 
+        # Used to prevent Rate limit exceeding
         time.sleep(1.5)
 
         # Construct a prompt with the extracted entities

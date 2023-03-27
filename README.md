@@ -1,6 +1,6 @@
 # COMS-6111-Project-2
 
-This project is an implementation of an information retrieval system that aims to improve the search results returned by Google Search Engine API by exploiting user-provided relevance feedback. The goal of the project is to help users find more relevant search results and refine their queries.
+This project is about information extraction on the web, in other words, extracting "structured" information that is embedded in natural language text on the web. We use Spacy to process the documents and use SpanBert and GPT3 API to extract relations in the sentences.
 
 ## Team Members
 - Christopher Asfour: cra2139
@@ -73,9 +73,12 @@ This Doc object will serve as a parameter that will be applied for SpanBERT (spa
 Note: We initialize a SpanBERT model using the pretrained weights located in the "./pretrained_spanbert" directory, if the value of the EXTRACTION_METHOD variable is equal to "-spanbert"; otherwise, it sets the variable spanbert to None; we won't be needing spanbert for GPT3.
 
 After the extraction method is complete, we receive a newly updated set of extracted tuples X. 
+We first check a specific condition before we handle the general cases; we first check to see if we used the SpanBERT extraction method on the Live_In target relation. The reason is because Live_In involves "per:countries_of_residence", "per:cities_of_residence", or "per:stateorprovinces_of_residence"; any sentence can be classified with any of these three specific relation types, so there is a possibility we may get in our final output a mixture of tuple results with per:countries_of_residence relation type AND per:cities_of_residence relation type. 
+We iterate through all the relations and print their respective outputs.
 
+If we are not dealing with this specific scenario, we process the outputs as expected. 
 
-
+To determine the status of querying for the next iteration, we first check if X contains at least k tuples. If it does, we immediately stop querying. Otherwise, we select from X a tuple y such that (1) y has not been used for querying yet and (2) if -spanbert is specified, y has an extraction confidence that is highest among the tuples in X that have not yet been used for querying. We create a query q from tuple y by just concatenating the subject and object values together. If no such y tuple exists, then stop. (ISE has "stalled" before retrieving k high-confidence tuples.)
 
 ## SpanBERT
     In SpanBERT, we first filter the entities of interest depending on the target relation we specified in the terminal parameters. <br />
@@ -106,7 +109,7 @@ After the extraction method is complete, we receive a newly updated set of extra
     We attempt to have our prompt text be informative enough for GPT-3 API to understand what the extraction goal is for the respective target relation.
     
     We can provide a general summary of the prompt text by saying it tries to extract information from a sentence about people and the organizations they work for, by looking for the [Schools_Attended | Work_For | Live_In | Top_Member_Employees] relation between the subject (a person) and the object (an organization) and returns a list of tuples in the format [(person's name, [Schools_Attended | Work_For | Live_In | Top_Member_Employees] , organization's name)]. If no such tuple exists, an empty list is returned, and the program tries to ensure that the subject and object are mentioned in the same sentence and represent the correct types. 
-    NOTE: The output for GPT-3 API can sometimes be inconsistent and out of our control. The sentences that are passed into GPT-3 do pass the validation checkst that were applied using SpanBERT but can be incorrectly classified as a valid relation. 
+    NOTE: The output for GPT-3 API can sometimes be inconsistent and out of our control. The sentences that are passed into GPT-3 do pass the validation checks that were applied using SpanBERT but can be incorrectly classified as a valid relation. 
 
 ## Credentials
 - JSON API Key: AIzaSyBr5aenBL0VfH55raQJUMSYiOmdkspmzPY

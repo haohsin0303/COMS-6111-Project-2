@@ -32,11 +32,15 @@ def extract_relations(doc, spanbert, X, R, target_relation, live_in_tuples, enti
     overall_relations = 0
     non_duplicated_relations = 0
 
+    # Iterate through each of the doc object sentences
     for index, sentence in enumerate(doc.sents):
 
+        # Create and iterate through the entity pairs
         entity_pairs = create_entity_pairs(sentence, entities_of_interest)
         examples = []
         for ep in entity_pairs:
+            # Append to the list the relations that satisfy the criteria corresponding to the target relation's entity types
+            # Add the swapped version as well
             if R == 1 and ((ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION") or (ep[2][1] == "PERSON" and ep[1][1] == "ORGANIZATION")):
                 examples.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
                 examples.append({"tokens": ep[0], "subj": ep[2], "obj": ep[1]})
@@ -56,14 +60,16 @@ def extract_relations(doc, spanbert, X, R, target_relation, live_in_tuples, enti
         if (index + 1) % 5 == 0:
             print("\tProcessed {count} / {total} sentences".format(count=index+1, total=len(list(doc.sents))))
 
+        # Skip if nothing was appended
         if len(examples) == 0:
             continue
 
-        # Classify Relations for all Candidate Entity Pairs using SpanBERT
         sentence_has_annotation = 0
+
         preds = spanbert.predict(examples)
         for ex, pred in list(zip(examples, preds)):
             relation = pred[0]
+            # We skip if the relation is not equal to the target relation or if Live_In tuple is used, the relation is not valid
             if (R != 3 and relation != target_relation) or (R == 3 and relation not in live_in_tuples.keys()):
                 continue
             sentence_has_annotation = 1
@@ -74,13 +80,17 @@ def extract_relations(doc, spanbert, X, R, target_relation, live_in_tuples, enti
             obj = ex["obj"][0]
             confidence = pred[1]
             print("\t\tOutput Confidence: {:.3f} ; Subject: {}  ; Object: {}".format(confidence, subj, obj))
+            # If confidence exceeds the input threshold
             if confidence > conf:
+                # Check if the confidence we have already added is lower than current confidence
                 if res[(subj, relation, obj)] < confidence:
+                    # Remove the low confidence tuple and add the higher confidence tuple
                     old_confidence = res[(subj, relation, obj)]
                     res[(subj, relation, obj)] = confidence
                     non_duplicated_relations += 1
                     X.discard((old_confidence, subj, obj))
                     X.add((float(confidence), subj, obj))
+                    # Repeat as well if we have a Live_In relation
                     if (R == 3 and relation in live_in_tuples.keys()):
                         live_in_tuples[relation].discard((old_confidence, subj, obj))
                         live_in_tuples[relation].add((float(confidence), subj, obj))
@@ -96,6 +106,7 @@ def extract_relations(doc, spanbert, X, R, target_relation, live_in_tuples, enti
     print("\tExtracted annotations for  {sentences_with_annotations}  out of total  {total_sentences}  sentences".format(sentences_with_annotations=sentences_with_annotations, total_sentences=len(list(doc.sents))))
     print("\tRelations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
 
+    # Return the updated set of extracted tuples X
     return X
 
 

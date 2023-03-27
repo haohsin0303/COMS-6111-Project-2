@@ -175,14 +175,18 @@ def parse_search_results(res):
             continue
         
         except:
+            # Any other issues, we skip
             continue
     
+    # If we are using spanbert and target relation is Live_In
     if (EXTRACTION_METHOD == "-spanbert" and R == 3):
         for relation_key in live_in_tuples:
+            # Go through each of the possible relation_keys and check if there have been tuples added.
             size_of_live_in_relation_tuples = len(live_in_tuples[relation_key])
             if ( size_of_live_in_relation_tuples > 0 ):
                 print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=relation_key, relations_length=size_of_live_in_relation_tuples))
                 print_results(live_in_tuples[relation_key])
+    # Otherwise, handle each extraction method normally
     else:
         if (EXTRACTION_METHOD == "-spanbert"):
             print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=relation_names[R], relations_length=len(X)))
@@ -229,12 +233,18 @@ def parse_search_results(res):
     
 
 def print_results(live_in_tuples=None):
+    """
+    Prints the results to the console. We print the confidence, subject, and object 
+    either from the set of extracted tuples X, or from the live_in_tuples. The live_in_tuples
+    should only be used when are are using spanbert and the target relation is Live_In. 
+
+    """
     if EXTRACTION_METHOD == "-spanbert":
         if (R == 3):
-            topKTuples = get_TopK_tuples(live_in_tuples)
+            resulting_tuples = get_tuples(live_in_tuples)
         else:
-            topKTuples = get_TopK_tuples()
-        for t in topKTuples:
+            resulting_tuples = get_tuples()
+        for t in resulting_tuples:
             print("Confidence: {confidence} \t| Subject: {subject} \t| Object: {object}".format(confidence=t[0], subject=t[1], object=t[2]))
     else:
         for t in X:
@@ -251,7 +261,7 @@ def createNewQuery(y):
     Q = y[1] + " " + y[2]
 
     
-def get_TopK_tuples(relation_tuples = X):
+def get_tuples(relation_tuples = X):
     """
     Returns tuples sorted in decreasing order by extraction codeince,
     together with the extraction confidence of each tuple.
@@ -259,7 +269,6 @@ def get_TopK_tuples(relation_tuples = X):
 
     sorted_result= sorted(relation_tuples, key=lambda x: x[0], reverse=True)
     return sorted_result
-    # return sorted_X[:K]
 
 
 def filter_entities_of_interest():
@@ -269,7 +278,7 @@ def filter_entities_of_interest():
 
     global entities_of_interest
 
-    # Filter entities of interest based on target relation
+    # Filter entities of interest based on the input target relation
     if R == 1:
         entities_of_interest = ["PERSON", "ORGANIZATION"]
     elif R == 2:
@@ -281,18 +290,45 @@ def filter_entities_of_interest():
 
 
 def spanbertExtraction(doc, spanbert):
+    """
+    Method used for SpanBERT extraction. 
+    We filter the specific entities of interest depending on the target relation and call
+    spacy_help_functions extract_relations method. 
+
+    Parameters used for extract_relations() :
+        doc: Doc object,
+        spanbert: SpanBERT model
+        X: the set of extracted tuples
+        R: the integer representing the target relation
+        relation_names[R]: The official string name representing the target relation
+        live_in_tuples: The dictionary mainly used when target relation is Live_In
+        entities_of_interest: The filtered entities of interest calculated before
+        T: The level of confidence
+
+    
+    """
 
     global X
-     
     filter_entities_of_interest()
 
     X = extract_relations(doc, spanbert, X, R, relation_names[R], live_in_tuples, entities_of_interest, float(T))
 
 
 def gpt3Extraction(doc):
+    """
+    Method used for GPT3 extraction. 
+    We filter the specific entities of interest depending on the target relation, instantiate
+    the GPT3 object, and call the GPT3 extract_relations() method, a slight variation of spacy_help_functions extract_relations function. 
+
+    Parameters used for extract_relations() :
+        doc: Doc object,
+        X: the set of extracted tuples
+        R: the integer representing the target relation
+        entities_of_interest: The filtered entities of interest calculated before
+    
+    """
 
     global X
-
     gpt3 = Gpt3(OPENAI_KEY, OPEN_API_MODEL, TEMPERATURE, R, Q)
 
     filter_entities_of_interest()
@@ -313,7 +349,6 @@ def main():
     terminal_arguments = sys.argv[1:]
     # Return if the number of arguments provided is incorrect
     if (len(terminal_arguments) != 8):
-        # print(terminal_arguments)
         print("Format must be <-spanbert|-gpt3> <API Key> <Engine Key> <openai secret key> <r=[1,4]>, <t=[0,1]>, <Seed Query> <k > 0>")
         return
     
