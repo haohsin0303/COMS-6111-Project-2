@@ -10,7 +10,7 @@ from spacy_help_functions import extract_relations
 from textwrap import dedent
 
 sys.path.append('.../SpanBERT')
-import ..spanbert.SpanBERT
+import spanbert.SpanBERT
 
 
 # Global Variables
