@@ -9,6 +9,8 @@ from googleapiclient.errors import HttpError
 from gpt3 import Gpt3
 from spacy_help_functions import extract_relations
 from textwrap import dedent
+from collections import defaultdict
+
 
 
 # Global Variables
@@ -52,6 +54,8 @@ live_in_tuples = {
     "per:stateorprovinces_of_residence":set(),
 }
 
+# Used in the spacy_help_functions to check if confidence levels are low for duplicates
+res = defaultdict(int)
 
 
 
@@ -308,10 +312,12 @@ def spanbertExtraction(doc, spanbert):
     
     """
 
-    global X
+    global X, res
     filter_entities_of_interest()
 
-    X = extract_relations(doc, spanbert, X, R, relation_names[R], live_in_tuples, entities_of_interest, float(T))
+    result = extract_relations(doc, spanbert, X, R, res, relation_names[R], live_in_tuples, entities_of_interest, float(T))
+    X = result[0]
+    res = result[1]
 
 
 def gpt3Extraction(doc):

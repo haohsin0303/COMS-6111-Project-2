@@ -88,7 +88,7 @@ class Gpt3:
 
         if self.target_relation == 1:
              prompt = """
-            Given a sentence, return a list of tuples representing people and the school/university/college/education organization that they attended.  Use the Schools_Attended relation to extract these tuples, with the person as the subject and the organization's name as the object. If no tuple exists, return an empty list. If a solution exists, only output a tuple(s). Ensure that the subject and the object are listed together in the sentence that the subject is an actual person, and the object is an actual organization.
+            Given a sentence, return a list of tuples representing people and the school/university/college/education institution that they attended.  Use the Schools_Attended relation to extract these tuples, with the person as the subject and the school's name as the object. If no tuple exists, return an empty list. If a solution exists, only output a tuple(s). Ensure that the subject and the object are listed together in the sentence that the subject is an actual person, and the object is an actual school or educational institution.
             The format of the result should follow this format: [(<PERSON'S FULL NAME>, "Schools_Attended", <ORGANIZATION NAME>)]
             Example Sentence: 'Mark Zuckerberg, Doctor of Laws Mark Zuckerberg, who founded Facebook in 2004, is the featured speaker at the Afternoon Program of Harvardâ€™s 366th Commencement'\
             Example Result: [("Mark Zuckerberg", "Schools_Attended", "Harvard")]

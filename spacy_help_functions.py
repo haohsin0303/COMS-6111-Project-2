@@ -24,9 +24,8 @@ def get_entities(sentence, entities_of_interest):
     return [(e.text, spacy2bert[e.label_]) for e in sentence.ents if e.label_ in spacy2bert]
 
 
-def extract_relations(doc, spanbert, X, R, target_relation, live_in_tuples, entities_of_interest=None, conf=0.7):
-    res = defaultdict(int)
-
+def extract_relations(doc, spanbert, X, R, res, target_relation, live_in_tuples, entities_of_interest=None, conf=0.7):
+    
     # Declare annotation counts
     sentences_with_annotations = 0
     overall_relations = 0
@@ -106,8 +105,8 @@ def extract_relations(doc, spanbert, X, R, target_relation, live_in_tuples, enti
     print("\tExtracted annotations for  {sentences_with_annotations}  out of total  {total_sentences}  sentences".format(sentences_with_annotations=sentences_with_annotations, total_sentences=len(list(doc.sents))))
     print("\tRelations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
 
-    # Return the updated set of extracted tuples X
-    return X
+    # Return the updated set of extracted tuples X as well as the new defaultdict storing the tuples with their confidence levels
+    return (X, res)
 
 
 def create_entity_pairs(sents_doc, entities_of_interest, window_size=40):

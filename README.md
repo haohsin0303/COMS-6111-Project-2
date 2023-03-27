@@ -62,7 +62,7 @@ The project's internal design comprises several modules responsible for differen
 ## Detailed Description
 
 After terminal parameter validation checks have passed and querying Google with the initial seed query has successfully completed, we first extract the unique URLs found from the search results and then iterate through each of the unique URLs. 
-We perform an HTML request with the given URL and handle possible timeouts or response error codes through a `try-except` block. If an exception is found, we simply continue.
+We perform an HTML request with the given URL and handle possible timeouts or response error codes through a `try-except` block. If an exception is found, like a 403 error, we simply continue by printing "The URL cannot be processed".  
 
 Next, we utilize BeautifulSoup to extract the actual plain text and use the `re` library to remove unnecessary characters. As stated in the project description, we trim the resulting plain text to 10,000 characters if the text exceeds such number of characters.
 
@@ -97,7 +97,7 @@ If the confidence of the new relation is below the threshold, it is ignored.<br 
 
 Finally, the code prints the number of extracted relations, the number of sentences with annotations, and the total number of sentences. 
     
-The function returns the set of extracted relations X, which is redefined in `main.py`. 
+The function returns the set of extracted relations X, which is redefined in `main.py` along with the updated default dictionary res, which is used for confidence comparisons in the `extract_relations()` function.
 
 ### GPT3
 In GPT3, we first instantiate the custom class GPT3. The object takes the OpenAI key, the OpenAI model we will use (text-davinci-003), the temperature, the integer R, and the seed query Q. 
@@ -107,9 +107,9 @@ Nevertheless, we pass in the successfully validated sentences as having correct 
 
 We attempt to have our prompt text be informative enough for GPT-3 API to understand the extraction goal for the respective target relation.
 
-We can provide a general summary of the prompt text by saying it tries to extract information from a sentence about people and the organizations they work for, by looking for the `[Schools_Attended | Work_For | Live_In | Top_Member_Employees]` relation between the subject (a person) and the object (an organization) and returns a list of tuples in a specific format (e.g. `[(person's name, [Schools_Attended | Work_For | Live_In | Top_Member_Employees] , organization's name)]`). If no such tuple exists, an empty list is returned, and the program tries to ensure that the subject and object are mentioned in the same sentence and represent the correct types. 
+We can provide a general summary of the prompt text by stating it tries to extract information from a sentence about people and the organizations they work for, by looking for the `[Schools_Attended | Work_For | Live_In | Top_Member_Employees]` relation between the subject (a person) and the object (an organization) and returns a list of tuples in a specific format (e.g. `[(person's name, [Schools_Attended | Work_For | Live_In | Top_Member_Employees] , organization's name)]`). If no such tuple exists, an empty list is returned, and the program tries to ensure that the subject and object are mentioned in the same sentence and represent the correct types. 
 
-<b><i>NOTE: The output for GPT-3 API can sometimes be inconsistent and out of our control. The sentences passed into GPT-3 do pass the validation checks applied using SpanBERT but can be incorrectly classified as a valid relation. We have done our best to create a descriptive prompt text with provided example sentences and example outputs for GPT-3 API in order to produce relevant extracted tuples.</b></i>
+<b><i>NOTE: The output for GPT-3 API can sometimes be inconsistent and out of our control. The sentences passed into GPT-3 do pass the validation checks applied using SpanBERT but can be incorrectly classified as a valid relation. We have done our best to create a descriptive prompt text with provided example sentences and example outputs for GPT-3 API in order to produce relevant extracted tuples. We have provided an example sentence along with an example output, have tried various temperature degrees that are all below 0.3, and followed Professor Gravano's implementation from lecture. This is the best prompt texts we could create </i></b>
 
 Finally, like SpanBERT, the function returns the updated set of extracted relations X.
 
