@@ -96,7 +96,8 @@ Note: We initialize a SpanBERT model using the pretrained weights located in the
     Now, we call extract_methods() method, which stems from the custom class GPT3. The functionality is very similar to the function defined for the SpanBERT extraction method, but we perform less operations. We still perform the same important check of determining whether the entity pair correctly corresponds with the target relation's entity type. 
     Nevertheless, we pass in the sentences that were successfully validated as having correct entity types into the GPT-3 API, along with the vital prompt text. We do not need to check for level of confidence like SpanBERT.
 
-    We attempt to have our prompt text be informative enough for GPT-3 API to understand what the extraction goal is for the respective target relatoin. 
+    We attempt to have our prompt text be informative enough for GPT-3 API to understand what the extraction goal is for the respective target relation. 
+    The prompt text starts with 
 
 
 
