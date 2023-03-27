@@ -1,23 +1,22 @@
-import sys
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from textwrap import dedent
-from bs4 import BeautifulSoup
+import re
 import requests
 import spacy
-from spanbert import SpanBERT
+import sys
+from bs4 import BeautifulSoup
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from gpt3 import Gpt3
-from spacy_help_functions import get_entities, create_entity_pairs
-from html import unescape
-import re
+from spanbert import SpanBERT
+from spacy_help_functions import extract_relations
+from textwrap import dedent
+
 
 # Global Variables
 API_KEY = None
 ENGINE_KEY = None
-# sk-t14ovJEbrUjc4eimt0BvT3BlbkFJZS1hOo97fZYj317oO2Z
 OPENAI_KEY = None
 OPEN_API_MODEL = 'text-davinci-003'
-TEMPERATURE = 0.29
+TEMPERATURE = 0.1
 ITERATION_COUNT = 0
 EXTRACTION_METHOD = None
 CALCULATED_PRECISION = -1
@@ -33,19 +32,10 @@ tuples_used_for_query = set()
 
 possible_relations = ["Schools_Attended", "Work_For", "Live_In", "Top_Member_Employees"]
 
-
-# Define the required named entity types for each relation
-# required_entity_types = {
-#     "per:employee_of": {"subject": "PERSON", "object": "ORGANIZATION"},
-#     "org:top_members/employees": {"subject": "ORGANIZATION", "object": "PERSON"},
-#     "per:schools_attended": {"subject": "PERSON", "object": "ORGANIZATION"},
-#     "per:live_in": {"subject": "PERSON", "object": ["LOCATION", "CITY", "STATE_OR_PROVINCE", "COUNTRY"]}
-# }
-
 relation_names = {
     1: "per:schools_attended",
     2: "per:employee_of",
-    3: "per:live_in",
+    3: ["per:countries_of_residence", "per:cities_of_residence", "per:stateorprovinces_of_residence"],
     4: "org:top_members/employees",
 }
 
@@ -55,6 +45,14 @@ required_entity_types = {
     "per:schools_attended": "Schools_Attended",
     "per:live_in": "Live_In"
 }
+
+live_in_tuples = {
+    "per:countries_of_residence": set(),
+    "per:cities_of_residence": set(),
+    "per:stateorprovinces_of_residence":set(),
+}
+
+
 
 
 def write_parameters():
@@ -118,40 +116,38 @@ def get_google_search_results():
     
     if (ITERATION_COUNT >= 1):
         print("Total # of iterations = {count}".format(count=ITERATION_COUNT))
-    
 
 
 def parse_search_results(res):
+
+    # initialize spanbert if the extraction method matches
+    spanbert = SpanBERT("./pretrained_spanbert") if EXTRACTION_METHOD == "-spanbert" else None
 
     visited_urls = set()
     for _, item in enumerate(res['items']):
         # Extracts url
         result_url = item.get('link', 'none')
         visited_urls.add(result_url)
-    
 
     visited_urls = set()
-    visited_urls.add("https://news.harvard.edu/gazette/story/2017/05/harvard-awards-10-honorary-degrees-at-366th-commencement/")
+    visited_urls.add("https://en.wikipedia.org/wiki/Bill_Gates")
     for url_count, url in enumerate(visited_urls):
         # try:
+        print("URL ( {curr_url} / {total_num_of_urls}): {link}".format(curr_url=url_count+1, total_num_of_urls=len(visited_urls), link=url))
         response = requests.get(url, timeout=10)
         response.raise_for_status()  # raises an exception for 4xx or 5xx status codes
         page_content = response.content
-        print("URL ( {curr_url} / {total_num_of_urls}): {link}".format(curr_url=url_count+1, total_num_of_urls=len(visited_urls), link=url))
 
         # Extract the actual plain text from the webpage using Beautiful Soup.
         soup = BeautifulSoup(page_content, "html.parser")
-        #Removing redundant newlines and some whitespace characters, according to https://edstem.org/us/courses/34785/discussion/2831362
+        
+        # Removing redundant newlines and some whitespace characters, according to https://edstem.org/us/courses/34785/discussion/2831362
         preprocessed_text = "".join(soup.text)
         resulting_plain_text = re.sub(u'\xa0', ' ', preprocessed_text) 
         resulting_plain_text = re.sub('\t+', ' ', resulting_plain_text) 
         resulting_plain_text = re.sub('\n+', ' ', resulting_plain_text) 
         resulting_plain_text = re.sub(' +', ' ', resulting_plain_text) 
         resulting_plain_text = resulting_plain_text.replace('\u200b', '')
-
-        # resulting_plain_text = resulting_plain_text.replace("\n", " ").replace("\t", " ").strip()
-        # resulting_plain_text = " ".join(resulting_plain_text.split())
-        # resulting_plain_text = unescape(resulting_plain_text)
 
         print("\tFetching text from url ...")
 
@@ -164,48 +160,42 @@ def parse_search_results(res):
         
         doc = nlp(resulting_plain_text)
 
-        # Split the text into sentences
-        # sentences = [s.text.replace("\n", "").replace("\t", "").strip() for s in doc.sents]
-        # for i, s in enumerate(doc.sents):
-        #     print(s)
-        #     if i > 5:
-        #         break
-        # for sent in doc.sents:
-            # sent = sent.text.replace("\n", "").replace("\t", "").strip()
-        # print(sentences[:10])
-
-        # # Extract named entities from each sentence
-        # entities = []
-        # for s in doc.sents:
-        #     entities.extend([(e.text, e.label_) for e in s.ents])
-            
         print("\tExtracted {num_of_sentences} sentences. Processing each sentence one by one to check for presence of right pair of named entity types; if so, will run the second pipeline ...".format(num_of_sentences=len(list(doc.sents))))
         if EXTRACTION_METHOD == "-spanbert":
-            spanbertExtraction(doc)
+            spanbertExtraction(doc, spanbert)
         else:
             gpt3Extraction(doc)
 
 
         # except (requests.exceptions.RequestException, ValueError):
         #     #Skip url if we cannot retrieve the webpage
-        #     print("{URL} cannot be retrieved successfully ".format(URL=url))
+        #     print("\t{URL} cannot be retrieved successfully. The URL will be skipped".format(URL=url))
         #     continue
 
         # except requests.exceptions.Timeout:
         #     # Skip url if timed out
+        #     print("\t{URL} repsonse timed out. The URL will be skipped".format(URL=url))
+        #     continue
+        
+        # except:
         #     continue
     
-    print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=relation_names[R], relations_length=len(X)))
+    if (EXTRACTION_METHOD == "-spanbert" and R == 3):
+        for relation_key in live_in_tuples:
+            size_of_live_in_relation_tuples = len(live_in_tuples[relation_key])
+            if ( size_of_live_in_relation_tuples > 0 ):
+                print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=relation_key, relations_length=size_of_live_in_relation_tuples))
+                print_results(live_in_tuples[relation_key])
+    else:
+        if (EXTRACTION_METHOD == "-spanbert"):
+            print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=relation_names[R], relations_length=len(X)))
+        else:
+            print("================== ALL RELATIONS for {relation_name} ( {relations_length} ) =================".format(relation_name=possible_relations[int(R)-1], relations_length=len(X)))
+        print_results()
+
 
     # If X contains at least k tuples
     if len(X) >= int(K):
-        if EXTRACTION_METHOD == "-spanbert":
-            topKTuples = get_TopK_tuples()
-            for t in topKTuples:
-                print("Confidence: {confidence} \t| Subject: {subject} \t| Object: {object}".format(confidence=t[0], subject=t[1], object=t[2]))
-        else:
-            for t in X:
-                print("Subject: {subject} \t| Object: {object}".format(subject=t[1], object=t[2]))
         return False
 
     # Otherwise,
@@ -217,7 +207,6 @@ def parse_search_results(res):
             if y not in tuples_used_for_query:
                 if EXTRACTION_METHOD == "-spanbert":
                     unused_tuples = X - (tuples_used_for_query)
-                    
                     # y has an extraction confidence that is highest among the tuples in X that
                     # have not been used for querying.
                     max_confidence = max(unused_tuples, key=lambda x: x[0])[0]
@@ -226,43 +215,61 @@ def parse_search_results(res):
                         # Create query Q from tuple y
                         createNewQuery(y)
                         tuples_used_for_query.add(y)
+                        break
                 else:
                     found_y_tuple = True
                     # Create new query q for -gpt3
                     createNewQuery(y)
                     tuples_used_for_query.add(y)
+
         # If no such y tuple exists, then stop
         if (not(found_y_tuple)):
             print("ISE has stalled before retrieving k high-confidence tuples")
             return False
+
         # Else, continue querying
         return True
     
+
+def print_results(live_in_tuples=None):
+    if EXTRACTION_METHOD == "-spanbert":
+        if (R == 3):
+            topKTuples = get_TopK_tuples(live_in_tuples)
+        else:
+            topKTuples = get_TopK_tuples()
+        for t in topKTuples:
+            print("Confidence: {confidence} \t| Subject: {subject} \t| Object: {object}".format(confidence=t[0], subject=t[1], object=t[2]))
+    else:
+        for t in X:
+            print("Subject: {subject} \t| Object: {object}".format(subject=t[1], object=t[2]))
+    
+
+
 def createNewQuery(y):
     """
     Create a query q from tuple y by just concatenating the 
     attribute values together,
-    
     """
     global Q
     Q = y[1] + " " + y[2]
 
-
     
-def get_TopK_tuples():
+def get_TopK_tuples(relation_tuples = X):
     """
     Returns tuples sorted in decreasing order by extraction codeince,
     together with the extraction confidence of each tuple.
     """
-    sorted_X = sorted(X, key=lambda x: x[0], reverse=True)
-    return sorted_X[:K]
+
+    sorted_result= sorted(relation_tuples, key=lambda x: x[0], reverse=True)
+    return sorted_result
+    # return sorted_X[:K]
 
 
 def filter_entities_of_interest():
     """
     Based on the desired relation R, we extract the relation's entities
-
     """
+
     global entities_of_interest
 
     # Filter entities of interest based on target relation
@@ -276,163 +283,24 @@ def filter_entities_of_interest():
         entities_of_interest = ["ORGANIZATION", "PERSON"]
 
 
-def spanbertExtraction(doc):
+def spanbertExtraction(doc, spanbert):
+
+    global X
+     
+    filter_entities_of_interest()
+
+    X = extract_relations(doc, spanbert, X, R, relation_names[R], live_in_tuples, entities_of_interest, float(T))
+
+
+def gpt3Extraction(doc):
 
     global X
 
-    spanbert = SpanBERT("./pretrained_spanbert")  
-    filter_entities_of_interest()
-
-    #Declare annotation counts
-    sentences_with_annotations = 0
-    overall_relations = 0
-    non_duplicated_relations = 0
-    
-    for index, sentence in enumerate(doc.sents):
-        # print("\n\nProcessing sentence: {}".format(sentence))
-
-
-        # print("Tokenized sentence: {}".format([token.text for token in sentence]))
-        # ents = get_entities(sentence, entities_of_interest)
-        # print(ents)
-        # print("spaCy extracted entities: {}".format(ents))
-
-        # create entity pairs
-        candidate_pairs = []
-        sentence_entity_pairs = create_entity_pairs(sentence, entities_of_interest)
-        for ep in sentence_entity_pairs:
-            if R == 1 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Schools_Attended: Subject=PERSON, Object=ORGANIZATION
-                print("SCHOOLS_ATTENDED HIT")
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-            elif R == 2 and ep[1][1] == "PERSON" and ep[2][1] == "ORGANIZATION": # Work_For: Subject=PERSON, Object=ORGANIZATION
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-            elif R == 3 and ep[1][1] == "PERSON" and ep[2][1] in ["LOCATION", "CITY", "STATE_OR_PROVINCE", "COUNTRY"]: # Live_In: Subject=PERSON, Object=LOCATION/CITY/STATE_OR_PROVINCE/COUNTRY
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-            elif R == 4 and ep[1][1] == "ORGANIZATION" and ep[2][1] == "PERSON": # Top_Member_Employees: Subject=ORGANIZATION, Object=PERSON
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-
-        # Classify Relations for all Candidate Entity Pairs using SpanBERT
-        candidate_pairs = [p for p in candidate_pairs if not p["subj"][1] in ["DATE", "LOCATION"]]  # ignore subject entities with date/location type
-        # print("Candidate entity pairs:")
-        # for p in candidate_pairs:
-            # print("Subject: {}\tObject: {}".format(p["subj"][0:2], p["obj"][0:2]))
-        # print("Applying SpanBERT for each of the {} candidate pairs. This should take some time...".format(len(candidate_pairs)))
-        print("# of candidate_pairs:", len(candidate_pairs))
-        if len(candidate_pairs) == 0:
-            continue
-
-        relation_preds = spanbert.predict(candidate_pairs)  # get predictions: list of (relation, confidence) pairs
-        if len(relation_preds) > 0:
-            sentences_with_annotations += 1
-
-        if (index + 1) % 5 == 0:
-            print("\tProcessed {count} / {total} sentences".format(count=index+1, total=len(list(doc.sents))))
-
-        # Print Extracted Relations
-        for ex, pred in list(zip(candidate_pairs, relation_preds)):
-            print("\n\t\t=== Extracted Relation ===")
-            # if relation in ['per:schools_attended', 'per:employee_of', 'per:cities_of_residence', 'org:top_members/employees']\
-            # and required_entity_types[relation] == possible_relations[int(R)-1]:
-            overall_relations += 1
-            non_duplicated_relations += 1
-            output_confidence = pred[1]
-            print("\t\tInput tokens: {input_tokens}".format(input_tokens=ex["tokens"]))
-            print("\t\tOutput Confidence: {output_confidence} ; Subject: {subject} ; Object: {object} ;".format(output_confidence=output_confidence, subject=ex["subj"][0], object=ex["obj"][0]))
-            # print("\tSubject: {}\tObject: {}\tRelation: {}\tConfidence: {:.2f}".format(ex["subj"][0], ex["obj"][0], relation, pred[1]))
-            if (output_confidence >= float(T)):
-                for extracted_tuple in X.copy():
-                    if (extracted_tuple[1] == ex["subj"][0] and extracted_tuple[2] == ex["obj"][0]):
-                        if (extracted_tuple[0] > output_confidence):
-                            non_duplicated_relations -= 1
-                            print("\t\tDuplicate with lower confidence than existing record. Ignoring this.")
-                            print("\t\t==========")
-                            break
-                        else:
-                            X.remove(extracted_tuple)
-                            X.add((output_confidence, ex["subj"][0], ex["obj"][0]))
-                            print("\t\tAdding to set of extracted relations")
-                            print("\t\t==========")
-                    else:
-                        X.add((output_confidence, ex["subj"][0], ex["obj"][0]))
-                        print("\t\tAdding to set of extracted relations")
-                        print("\t\t==========")
-
-    print("\tExtracted annotations for  {sentences_with_annotations}  out of total  {total_sentences}  sentences".format(sentences_with_annotations=sentences_with_annotations, total_sentences=len(list(doc.sents))))
-    print("\tRelations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
-
-
-def gpt3Extraction(doc): # TODO
-
-    gpt3 = Gpt3(OPENAI_KEY, OPEN_API_MODEL, TEMPERATURE, R)
+    gpt3 = Gpt3(OPENAI_KEY, OPEN_API_MODEL, TEMPERATURE, R, Q)
 
     filter_entities_of_interest()
 
-    # Declare annotation counts
-    sentences_with_annotations = 0
-    overall_relations = 0
-    non_duplicated_relations = 0
-
-    for index, sentence in enumerate(doc.sents):
-        # print("\n\nProcessing sentence: {}".format(sentence))
-
-        # Sentence:  From Wikipedia, the free encyclopedia American internet entrepreneur and business magnate (born 1984) "Zuckerberg" redirects here.
-
-
-        # create entity pairs
-        candidate_pairs = []
-        sentence_entity_pairs = create_entity_pairs(sentence, entities_of_interest)
-        # print("Entity Pair: ", sentence_entity_pairs)
-        for ep in sentence_entity_pairs:
-            if R == 1 and ep[-2][1] == "PERSON" and ep[-1][1] == "ORGANIZATION": # Schools_Attended: Subject=PERSON, Object=ORGANIZATION
-                # print("Sentence: ", sentence)
-                print("SCHOOLS_ATTENDED HIT")
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-            elif R == 2 and ep[-2][1] == "PERSON" and ep[-1][1] == "ORGANIZATION": # Work_For: Subject=PERSON, Object=ORGANIZATION
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-            elif R == 3 and ep[-2][1] == "PERSON" and ep[-1][1] in ["LOCATION", "CITY", "STATE_OR_PROVINCE", "COUNTRY"]: # Live_In: Subject=PERSON, Object=LOCATION/CITY/STATE_OR_PROVINCE/COUNTRY
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-            elif R == 4 and ep[-2][1] == "ORGANIZATION" and ep[-1][1] == "PERSON": # Top_Member_Employees: Subject=ORGANIZATION, Object=PERSON
-                candidate_pairs.append({"tokens": ep[0], "subj": ep[1], "obj": ep[2]})
-
-        candidate_pairs = [p for p in candidate_pairs if not p["subj"][1] in ["DATE", "LOCATION"]]  # ignore subject entities with date/location type
-
-        # if (str(sentence) =="From Wikipedia, the free encyclopedia American internet entrepreneur and business magnate (born 1984) 'Zuckerberg' redirects here."):
-        #     print("KEY SENTENCE PRINTED!")
-
-        if (index + 1) % 5 == 0:
-            print("\tProcessed {count} / {total} sentences".format(count=index+1, total=len(list(doc.sents))))
-
-        if len(candidate_pairs) == 0:
-            continue
-
-
-        relation_preds = gpt3.predict(str(sentence).strip())
-        # if "Eduardo" in str(sentence):
-        #     print("Eduardo in sentence:", sentence)
-        # print("GPT3 Relation Predictions: ", relation_preds)
-
-        if len(relation_preds) > 0:
-            sentences_with_annotations += 1
-
-        # Print Extracted Relations
-        for prediction in eval(relation_preds):
-            print("\n\t\t=== Extracted Relation ===")
-            print("\t\tSentence:", sentence)
-            print("\t\tSubject: {subject} ; Object: {object} ;".format(subject=prediction[0], object=prediction[2]))
-
-            overall_relations += 1
-
-            if (1.0, prediction[0], prediction[2]) in X:
-                print("\t\tDuplicate. Ignoring this.")
-            else:
-                X.add((1.0, prediction[0], prediction[2]))
-                non_duplicated_relations += 1
-                print("\t\tAdding to set of extracted relations")
-            
-            print("\t\t==========")                
-    
-    print("\tExtracted annotations for  {sentences_with_annotations}  out of total  {total_sentences}  sentences".format(sentences_with_annotations=sentences_with_annotations, total_sentences=len(list(doc.sents))))
-    print("\tRelations extracted from this website: {non_duplicated_relations} (Overall: {overall_relations})".format(non_duplicated_relations=non_duplicated_relations, overall_relations=overall_relations))
+    X = gpt3.extract_relations(doc, X, R, entities_of_interest)
 
 
 def main():
@@ -461,14 +329,14 @@ def main():
         print("Extraction method must be either '-spanbert' or '-gpt3'")
         return
     
-    R = terminal_arguments[4]
-    if (not (isinstance(eval(R), int) and 1 <= eval(R) <= 4)):
+    R = eval(terminal_arguments[4])
+    if (not (isinstance(R, int) and 1 <= R <= 4)):
         print("R must be an integer between 1 and 4")
         return
     R = int(R)
     
-    T = terminal_arguments[5]
-    if (not ((T.isdigit() or isinstance(eval(T), float)) and 0 <= eval(T) <= 1)):
+    T = eval(terminal_arguments[5])
+    if (not ((isinstance(T, int) or isinstance(T, float)) and 0 <= T <= 1)):
         print("T (Extraction confidence threshold) must be a real number between 0 and 1")
         return
     
@@ -477,8 +345,8 @@ def main():
         print("Seed Query must be filled with a list of words")
         return
     
-    K = terminal_arguments[7]
-    if (not (eval(K) > 0)):
+    K = eval(terminal_arguments[7])
+    if (not (K > 0)):
         print("K must be greater than 0")
         return
 
