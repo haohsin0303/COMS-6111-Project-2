@@ -129,8 +129,6 @@ def parse_search_results(res):
         result_url = item.get('link', 'none')
         visited_urls.add(result_url)
 
-    visited_urls = set()
-    visited_urls.add("https://en.wikipedia.org/wiki/Bill_Gates")
     for url_count, url in enumerate(visited_urls):
         # try:
         print("URL ( {curr_url} / {total_num_of_urls}): {link}".format(curr_url=url_count+1, total_num_of_urls=len(visited_urls), link=url))

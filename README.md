@@ -30,13 +30,16 @@ pip3 install -r requirements.txt
 bash download_finetuned.sh
 ```
 
-3. Move the project into SpanBERT repository
+3. Copy all the project files into SpanBERT repository
 ```
 cd ..
-mv proj2 ./SpanBERT/
+cp ./proj2/main.py ./SpanBERT/
+cp ./proj2/gpt3.py ./SpanBERT/
+cp ./proj2/spacy_help_functions.py ./SpanBERT/
+cd SpanBERT/
 ```
 
-3. Run the program using the following command:
+3. Run the program in SpanBERT repository using the following command:
 ```
 python3 main.py [-spanbert|-gpt3] <API Key> <Engine Key> <OPENAI Key> <r=[1,4]>, <t=[0,1]>, <Seed Query> <k > 0>
 ```
@@ -96,8 +99,10 @@ Note: We initialize a SpanBERT model using the pretrained weights located in the
     Now, we call extract_methods() method, which stems from the custom class GPT3. The functionality is very similar to the function defined for the SpanBERT extraction method, but we perform less operations. We still perform the same important check of determining whether the entity pair correctly corresponds with the target relation's entity type. 
     Nevertheless, we pass in the sentences that were successfully validated as having correct entity types into the GPT-3 API, along with the vital prompt text. We do not need to check for level of confidence like SpanBERT.
 
-    We attempt to have our prompt text be informative enough for GPT-3 API to understand what the extraction goal is for the respective target relation. 
-    The prompt text starts with 
+    We attempt to have our prompt text be informative enough for GPT-3 API to understand what the extraction goal is for the respective target relation.
+    
+    We can provide a general summary of the prompt text by saying it tries to extract information from a sentence about people and the organizations they work for, by looking for the [Schools_Attended | Work_For | Live_In | Top_Member_Employees] relation between the subject (a person) and the object (an organization) and returns a list of tuples in the format [(person's name, [Schools_Attended | Work_For | Live_In | Top_Member_Employees] , organization's name)]. If no such tuple exists, an empty list is returned, and the program tries to ensure that the subject and object are mentioned in the same sentence and represent the correct types. 
+    NOTE: The output for GPT-3 API can sometimes be inconsistent. The sentences that are passed into GPT-3 
 
 
 
@@ -108,7 +113,11 @@ Note: We initialize a SpanBERT model using the pretrained weights located in the
 
 
 
-## Google Custom Search Engine Credentials
+
+
+
+
+## Credentials
 - JSON API Key: AIzaSyBr5aenBL0VfH55raQJUMSYiOmdkspmzPY
 - Search Engine ID: 089e480ae5f6ce283
-
+- OpenAI Secret Key: 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
