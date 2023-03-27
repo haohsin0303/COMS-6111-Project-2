@@ -2,15 +2,13 @@ import re
 import requests
 import spacy
 import sys
+from ..spanbert import SpanBERT
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from gpt3 import Gpt3
 from spacy_help_functions import extract_relations
 from textwrap import dedent
-
-sys.path.append('.../SpanBERT')
-import spanbert.SpanBERT
 
 
 # Global Variables
