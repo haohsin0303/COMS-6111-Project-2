@@ -68,9 +68,13 @@ We perform an HTML request with the given URL and handle possible timeouts or re
 Next, we utilize BeautifulSoup to extract the actual plain text and use the `re` library to remove unnecessary characters. As stated in the project description, we trim the resulting plain text to 10,000 characters if the text exceeds such number of characters.
 
 Then, we use the spacy language model and applies its NLP pipeline to the input text, which generates the processed Doc object.
-This Doc object will serve as a parameter that will be applied for SpanBERT (spanbertExtraction(doc)) and GPT3 (gpt3Extraction(doc)) extractions
+This Doc object will serve as a parameter that will be applied for SpanBERT (spanbertExtraction(doc)) and GPT3 (gpt3Extraction(doc)) extractions. We discuss further below in detail about how we do each respective extraction method. 
 
-Note: We initialize a SpanBERT model using the pretrained weights located in the "./pretrained_spanbert" directory, if the value of the EXTRACTION_METHOD variable is equal to "-spanbert"; otherwise, it sets the variable spanbert to None; we won't be needing spanbert for GPT3
+Note: We initialize a SpanBERT model using the pretrained weights located in the "./pretrained_spanbert" directory, if the value of the EXTRACTION_METHOD variable is equal to "-spanbert"; otherwise, it sets the variable spanbert to None; we won't be needing spanbert for GPT3.
+
+After the extraction method is complete, we receive a newly updated set of extracted tuples X. 
+
+
 
 
 ## SpanBERT
@@ -102,20 +106,7 @@ Note: We initialize a SpanBERT model using the pretrained weights located in the
     We attempt to have our prompt text be informative enough for GPT-3 API to understand what the extraction goal is for the respective target relation.
     
     We can provide a general summary of the prompt text by saying it tries to extract information from a sentence about people and the organizations they work for, by looking for the [Schools_Attended | Work_For | Live_In | Top_Member_Employees] relation between the subject (a person) and the object (an organization) and returns a list of tuples in the format [(person's name, [Schools_Attended | Work_For | Live_In | Top_Member_Employees] , organization's name)]. If no such tuple exists, an empty list is returned, and the program tries to ensure that the subject and object are mentioned in the same sentence and represent the correct types. 
-    NOTE: The output for GPT-3 API can sometimes be inconsistent. The sentences that are passed into GPT-3 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    NOTE: The output for GPT-3 API can sometimes be inconsistent and out of our control. The sentences that are passed into GPT-3 do pass the validation checkst that were applied using SpanBERT but can be incorrectly classified as a valid relation. 
 
 ## Credentials
 - JSON API Key: AIzaSyBr5aenBL0VfH55raQJUMSYiOmdkspmzPY

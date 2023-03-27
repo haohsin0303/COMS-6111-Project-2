@@ -130,53 +130,52 @@ def parse_search_results(res):
         visited_urls.add(result_url)
 
     for url_count, url in enumerate(visited_urls):
-        # try:
-        print("URL ( {curr_url} / {total_num_of_urls}): {link}".format(curr_url=url_count+1, total_num_of_urls=len(visited_urls), link=url))
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()  # raises an exception for 4xx or 5xx status codes
-        page_content = response.content
+        try:
+            print("URL ( {curr_url} / {total_num_of_urls}): {link}".format(curr_url=url_count+1, total_num_of_urls=len(visited_urls), link=url))
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()  # raises an exception for 4xx or 5xx status codes
+            page_content = response.content
 
-        # Extract the actual plain text from the webpage using Beautiful Soup.
-        soup = BeautifulSoup(page_content, "html.parser")
+            # Extract the actual plain text from the webpage using Beautiful Soup.
+            soup = BeautifulSoup(page_content, "html.parser")
+            
+            # Removing redundant newlines and some whitespace characters, according to https://edstem.org/us/courses/34785/discussion/2831362
+            preprocessed_text = "".join(soup.text)
+            resulting_plain_text = re.sub(u'\xa0', ' ', preprocessed_text) 
+            resulting_plain_text = re.sub('\t+', ' ', resulting_plain_text) 
+            resulting_plain_text = re.sub('\n+', ' ', resulting_plain_text) 
+            resulting_plain_text = re.sub(' +', ' ', resulting_plain_text) 
+            resulting_plain_text = resulting_plain_text.replace('\u200b', '')
+
+            print("\tFetching text from url ...")
+
+            # Truncate the text to its first 10,000 characters (for efficiency) and discard the rest.
+            if len(resulting_plain_text) > 10000:
+                print("\tTrimming webpage content from {resulting_text_length} to 10000 characters".format(resulting_text_length=len(resulting_plain_text)))
+                resulting_plain_text = resulting_plain_text[:10000]
+            print("\tWebpage length (num characters): {text_length}".format(text_length=len(resulting_plain_text)))
+            print("\tAnnotating the webpage using spacy...")
+            
+            doc = nlp(resulting_plain_text)
+
+            print("\tExtracted {num_of_sentences} sentences. Processing each sentence one by one to check for presence of right pair of named entity types; if so, will run the second pipeline ...".format(num_of_sentences=len(list(doc.sents))))
+            if EXTRACTION_METHOD == "-spanbert":
+                spanbertExtraction(doc, spanbert)
+            else:
+                gpt3Extraction(doc)
+
+        except (requests.exceptions.RequestException, ValueError):
+            #Skip url if we cannot retrieve the webpage
+            print("\t{URL} cannot be retrieved successfully. The URL will be skipped".format(URL=url))
+            continue
+
+        except requests.exceptions.Timeout:
+            # Skip url if timed out
+            print("\t{URL} repsonse timed out. The URL will be skipped".format(URL=url))
+            continue
         
-        # Removing redundant newlines and some whitespace characters, according to https://edstem.org/us/courses/34785/discussion/2831362
-        preprocessed_text = "".join(soup.text)
-        resulting_plain_text = re.sub(u'\xa0', ' ', preprocessed_text) 
-        resulting_plain_text = re.sub('\t+', ' ', resulting_plain_text) 
-        resulting_plain_text = re.sub('\n+', ' ', resulting_plain_text) 
-        resulting_plain_text = re.sub(' +', ' ', resulting_plain_text) 
-        resulting_plain_text = resulting_plain_text.replace('\u200b', '')
-
-        print("\tFetching text from url ...")
-
-        # Truncate the text to its first 10,000 characters (for efficiency) and discard the rest.
-        if len(resulting_plain_text) > 10000:
-            print("\tTrimming webpage content from {resulting_text_length} to 10000 characters".format(resulting_text_length=len(resulting_plain_text)))
-            resulting_plain_text = resulting_plain_text[:10000]
-        print("\tWebpage length (num characters): {text_length}".format(text_length=len(resulting_plain_text)))
-        print("\tAnnotating the webpage using spacy...")
-        
-        doc = nlp(resulting_plain_text)
-
-        print("\tExtracted {num_of_sentences} sentences. Processing each sentence one by one to check for presence of right pair of named entity types; if so, will run the second pipeline ...".format(num_of_sentences=len(list(doc.sents))))
-        if EXTRACTION_METHOD == "-spanbert":
-            spanbertExtraction(doc, spanbert)
-        else:
-            gpt3Extraction(doc)
-
-
-        # except (requests.exceptions.RequestException, ValueError):
-        #     #Skip url if we cannot retrieve the webpage
-        #     print("\t{URL} cannot be retrieved successfully. The URL will be skipped".format(URL=url))
-        #     continue
-
-        # except requests.exceptions.Timeout:
-        #     # Skip url if timed out
-        #     print("\t{URL} repsonse timed out. The URL will be skipped".format(URL=url))
-        #     continue
-        
-        # except:
-        #     continue
+        except:
+            continue
     
     if (EXTRACTION_METHOD == "-spanbert" and R == 3):
         for relation_key in live_in_tuples:
